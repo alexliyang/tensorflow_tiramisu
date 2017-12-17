@@ -40,6 +40,8 @@ class Tiramisu():
         self.y = tf.placeholder('float', shape=[None, edgelength, edgelength, CLASSES])
         self.phase = tf.placeholder('bool')
         
+        #w = tf.where(y > 0, 1, 0) # discard void class for later loss calculation
+        
         concatenations = []
         
         cycle_start = slim.conv2d(self.X, 48, kernel_size=3, activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer_conv2d(uniform=True, seed=None, dtype=tf.float32), scope='conv_init')        
@@ -64,7 +66,9 @@ class Tiramisu():
     def _trainer(self, logits, labels, n_classes):
         softmaxed = tf.nn.softmax(logits)
         flat_logits = tf.reshape(softmaxed, [-1, n_classes])
-        flat_labels = tf.reshape(self.y, [-1, n_classes])        
+        flat_labels = tf.reshape(self.y, [-1, n_classes])
+        #flat_weights = tf.reshape(w, [-1, 1])
+        #tf.losses.sparse_softmax_cross_entropy(labels=flat_labels, logits=flat_logits, weights=flat_weights)
         self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=flat_logits, labels=flat_labels))        
         extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(extra_update_ops):
