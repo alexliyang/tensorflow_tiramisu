@@ -8,21 +8,12 @@ class Tiramisu():
     #def __init__(self, edgelength=256, CLASSES=8, BANDS=3, k=16, layers=[4,5,7,10,12,15]):
     def __init__(self, edgelength=32, CLASSES=8, BANDS=4, k=16, layers=[4,5,7]):        
         lgts, lbls = self._build_tiramisu(edgelength, CLASSES, BANDS, k, layers)
-        
-        softmaxed = tf.nn.softmax(lgts)
-        flat_logits = tf.reshape(softmaxed, [-1, CLASSES])
-        flat_labels = tf.reshape(tf.one_hot(lbls, CLASSES), [-1, CLASSES])#lbls)
-        
-        w = tf.where(lbls > 0, tf.ones_like(lbls), tf.zeros_like(lbls)) # discard void class for later loss calculation
-        flat_w = tf.reshape(w, [-1, 1])
-        #flat_labels = tf.reshape(lbls, [-1, CLASSES])
-        
-        print(flat_w)
-        print(flat_logits)
-        print(flat_labels)
-        
-        self._trainer(flat_logits, flat_labels, CLASSES, flat_w)
-        self._statistics(flat_logits, flat_labels)
+        flat_logits = tf.reshape(lgts, [-1, edgelength*edgelength, CLASSES])
+        flat_labels = tf.reshape(lbls, [-1, edgelength*edgelength])
+        flat_w = tf.where(flat_labels > 0, tf.ones_like(flat_labels), tf.zeros_like(flat_labels))
+                
+        self._trainer(flat_logits, flat_labels, CLASSES, flat_w)#, flat_w)
+        #self._statistics(flat_logits, flat_labels)
         
         merged = tf.summary.merge_all()
         
@@ -76,15 +67,11 @@ class Tiramisu():
             blocked = self._DenseBlock(concatenated, self.phase, l, k, self.kp)
             
         conv_final = slim.conv2d(blocked, CLASSES, 3, 1, activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer_conv2d(uniform=True, seed=None, dtype=tf.float32))
-                
+        
         return conv_final, self.y
         
     def _trainer(self, logits, labels, n_classes, w):
-        #w = tf.where(labels > 0, tf.ones_like(labels), tf.zeros_like(labels)) # discard void class for later loss calculation
-        #flat_weights = tf.reshape(weights, [-1, 1])
-        #print(w)
         self.loss = tf.reduce_mean(tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits, weights=w))
-        #self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels))        
         extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(extra_update_ops):
             self.train_op = tf.train.AdamOptimizer(1e-3, .995).minimize(self.loss)            
