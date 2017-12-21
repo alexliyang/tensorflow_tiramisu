@@ -6,16 +6,18 @@ slim=tf.contrib.slim
 
 class Tiramisu():
     #def __init__(self, edgelength=256, CLASSES=8, BANDS=3, k=16, layers=[4,5,7,10,12,15]):
-    def __init__(self, edgelength=32, CLASSES=8, BANDS=4, k=16, layers=[4,5,7]):        
-        lgts, lbls = self._build_tiramisu(edgelength, CLASSES, BANDS, k, layers)
+    def __init__(self, edgelength=32, CLASSES=8, BANDS=4, k=16, layers=[4,5,7]): 
+        
+        lgts, lbls = self._build_tiramisu(edgelength, CLASSES, BANDS, k, layers)        
+        
         flat_logits = tf.reshape(lgts, [-1, edgelength*edgelength, CLASSES])
         flat_labels = tf.reshape(lbls, [-1, edgelength*edgelength])
+        
         flat_w = tf.where(flat_labels > 0, tf.ones_like(flat_labels), tf.zeros_like(flat_labels))
                 
-        self._trainer(flat_logits, flat_labels, CLASSES, flat_w)#, flat_w)
-        #self._statistics(flat_logits, flat_labels)
-        
-        merged = tf.summary.merge_all()
+        self._trainer(flat_logits, flat_labels, CLASSES, flat_w)        
+        self._accuracy(flat_logits, flat_labels, flat_w)       
+        self.merged = tf.summary.merge_all()
         
     def _Layer(self, inp, k, phase, kp):
         inp = tf.layers.batch_normalization(inp, training=phase)
@@ -45,7 +47,11 @@ class Tiramisu():
     
     def _build_tiramisu(self, edgelength, CLASSES, BANDS, k, layers):
         self.X = tf.placeholder('float', shape=[None, edgelength, edgelength, BANDS])
-        self.y = tf.placeholder('int32', shape=[None, edgelength, edgelength, 1])#CLASSES])
+        tf.summary.image('input_x', self.X[:, :, :, :3], 4)        
+        
+        self.y = tf.placeholder('int32', shape=[None, edgelength, edgelength, 1])
+        tf.summary.image('input_y', tf.cast(self.y, tf.uint8))
+        
         self.phase = tf.placeholder('bool')
         self.kp = tf.placeholder('float')
         
@@ -67,6 +73,7 @@ class Tiramisu():
             blocked = self._DenseBlock(concatenated, self.phase, l, k, self.kp)
             
         conv_final = slim.conv2d(blocked, CLASSES, 3, 1, activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer_conv2d(uniform=True, seed=None, dtype=tf.float32))
+        tf.summary.image('output_y', tf.expand_dims(tf.cast(tf.argmax(conv_final, 3), tf.uint8), 3), 4)
         
         return conv_final, self.y
         
@@ -77,8 +84,6 @@ class Tiramisu():
             self.train_op = tf.train.AdamOptimizer(1e-3, .995).minimize(self.loss)            
         tf.summary.scalar('loss', self.loss)
             
-    def _statistics(self, logits, labels):            
-        correct_pred = tf.equal(tf.argmax(logits, 1), tf.argmax(labels, 1))
-        self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-        tf.summary.scalar('accuracy', self.accuracy)
-        
+    def _accuracy(self, logits, labels, w):
+        predictions = tf.argmax(logits, 2)
+        self.acc = tf.metrics.accuracy(labels, predictions, w)
