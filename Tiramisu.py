@@ -54,19 +54,15 @@ class Tiramisu():
         inp = slim.conv2d_transpose(inp, filters, kernel_size=3, stride=2, weights_initializer=tf.contrib.layers.xavier_initializer_conv2d(uniform=True, seed=None, dtype=tf.float32))
         return inp
     
-
-    
     def _build_tiramisu(self, edgelength, CLASSES, BANDS, k, layers):
         self.X = tf.placeholder('float', shape=[None, edgelength, edgelength, BANDS])
-        tf.summary.image('input_x', self.X[:, :, :, :3], 4)        
+        tf.summary.image('input_x', self.X[:3, :, :, :3], 3)        
         
         self.y = tf.placeholder('int32', shape=[None, edgelength, edgelength, 1])
-        #self.y_show = self.y[:2]
+        self.ysub = tf.stack([self.y[0],self.y[1],self.y[2]], axis=0)
         
         summary_heatmap = tfplot.summary.wrap(figure_heatmap, batch=True)
-        summary_heatmap("heatmap/original", tf.expand_dims(self.y[0, :, :, 0], 0))        
-        
-        #tf.summary.image('input_y', tf.cast(self.y, tf.uint8))
+        summary_heatmap("input_y", self.ysub[:, :, :, 0])
         
         self.phase = tf.placeholder('bool')
         self.kp = tf.placeholder('float')
@@ -89,8 +85,9 @@ class Tiramisu():
             blocked = self._DenseBlock(concatenated, self.phase, l, k, self.kp)
             
         conv_final = slim.conv2d(blocked, CLASSES, 3, 1, activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer_conv2d(uniform=True, seed=None, dtype=tf.float32))
-        #tf.summary.image('output_y', tf.expand_dims(tf.cast(tf.argmax(conv_final, 3), tf.uint8), 3), 4)
-        summary_heatmap("outputY", tf.expand_dims(tf.cast(tf.argmax(conv_final, 3)[0], tf.uint8), 0))
+        conv_finalsub = tf.cast(tf.argmax(tf.stack([conv_final[0],conv_final[1],conv_final[2]], 0), 3), tf.uint8)
+        print(conv_finalsub)
+        summary_heatmap("output_pred", conv_finalsub)
         
         return conv_final, self.y
         
