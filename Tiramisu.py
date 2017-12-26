@@ -1,8 +1,17 @@
 import tensorflow as tf
+import matplotlib
+import tfplot
+import numpy as np
 slim=tf.contrib.slim
 
 # tensorflow attempt to achieve
 # https://arxiv.org/pdf/1611.09326.pdf
+
+def figure_heatmap(data, cmap=matplotlib.cm.rainbow):# Hier Farbe anpassbar
+    fig, ax = tfplot.subplots()
+    norm = matplotlib.colors.BoundaryNorm(np.arange(-0.5,8.5,1), cmap.N)
+    ax.imshow(data, cmap=cmap, norm=norm)
+    return fig
 
 class Tiramisu():
     #def __init__(self, edgelength=256, CLASSES=8, BANDS=3, k=16, layers=[4,5,7,10,12,15]):
@@ -45,12 +54,19 @@ class Tiramisu():
         inp = slim.conv2d_transpose(inp, filters, kernel_size=3, stride=2, weights_initializer=tf.contrib.layers.xavier_initializer_conv2d(uniform=True, seed=None, dtype=tf.float32))
         return inp
     
+
+    
     def _build_tiramisu(self, edgelength, CLASSES, BANDS, k, layers):
         self.X = tf.placeholder('float', shape=[None, edgelength, edgelength, BANDS])
         tf.summary.image('input_x', self.X[:, :, :, :3], 4)        
         
         self.y = tf.placeholder('int32', shape=[None, edgelength, edgelength, 1])
-        tf.summary.image('input_y', tf.cast(self.y, tf.uint8))
+        #self.y_show = self.y[:2]
+        
+        summary_heatmap = tfplot.summary.wrap(figure_heatmap, batch=True)
+        summary_heatmap("heatmap/original", tf.expand_dims(self.y[0, :, :, 0], 0))        
+        
+        #tf.summary.image('input_y', tf.cast(self.y, tf.uint8))
         
         self.phase = tf.placeholder('bool')
         self.kp = tf.placeholder('float')
@@ -73,7 +89,8 @@ class Tiramisu():
             blocked = self._DenseBlock(concatenated, self.phase, l, k, self.kp)
             
         conv_final = slim.conv2d(blocked, CLASSES, 3, 1, activation_fn=None, weights_initializer=tf.contrib.layers.xavier_initializer_conv2d(uniform=True, seed=None, dtype=tf.float32))
-        tf.summary.image('output_y', tf.expand_dims(tf.cast(tf.argmax(conv_final, 3), tf.uint8), 3), 4)
+        #tf.summary.image('output_y', tf.expand_dims(tf.cast(tf.argmax(conv_final, 3), tf.uint8), 3), 4)
+        summary_heatmap("outputY", tf.expand_dims(tf.cast(tf.argmax(conv_final, 3)[0], tf.uint8), 0))
         
         return conv_final, self.y
         
