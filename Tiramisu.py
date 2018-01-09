@@ -7,7 +7,7 @@ slim=tf.contrib.slim
 # tensorflow attempt to achieve
 # https://arxiv.org/pdf/1611.09326.pdf
 
-def figure_heatmap(data, cmap=matplotlib.cm.rainbow):# Hier Farbe anpassbar
+def figure_heatmap(data, cmap=matplotlib.cm.Set1):# Hier Farbe anpassbar
     fig, ax = tfplot.subplots()
     norm = matplotlib.colors.BoundaryNorm(np.arange(-0.5,8.5,1), cmap.N)
     ax.imshow(data, cmap=cmap, norm=norm)
@@ -15,7 +15,7 @@ def figure_heatmap(data, cmap=matplotlib.cm.rainbow):# Hier Farbe anpassbar
 
 class Tiramisu():
     #def __init__(self, edgelength=256, CLASSES=8, BANDS=3, k=16, layers=[4,5,7,10,12,15]):
-    def __init__(self, edgelength=32, CLASSES=8, BANDS=4, k=16, layers=[4,5,7]): 
+    def __init__(self, edgelength=64, CLASSES=5, BANDS=4, k=48, layers=[4,5,7,10,12,15]): 
         
         lgts, lbls = self._build_tiramisu(edgelength, CLASSES, BANDS, k, layers)        
         
@@ -23,6 +23,10 @@ class Tiramisu():
         flat_labels = tf.reshape(lbls, [-1, edgelength*edgelength])
         
         flat_w = tf.where(flat_labels > 0, tf.ones_like(flat_labels), tf.zeros_like(flat_labels))
+        
+        
+        running_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="my_metric")
+        self.running_vars_initializer = tf.variables_initializer(var_list=running_vars)
                 
         self._trainer(flat_logits, flat_labels, CLASSES, flat_w)        
         self._accuracy(flat_logits, flat_labels, flat_w)       
@@ -95,9 +99,10 @@ class Tiramisu():
         self.loss = tf.reduce_mean(tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits, weights=w))
         extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(extra_update_ops):
-            self.train_op = tf.train.AdamOptimizer(1e-3, .995).minimize(self.loss)            
+            self.train_op = tf.train.AdamOptimizer(1e-4, .995).minimize(self.loss)#1e-3            
         tf.summary.scalar('loss', self.loss)
             
     def _accuracy(self, logits, labels, w):
         predictions = tf.argmax(logits, 2)
-        self.acc = tf.metrics.accuracy(labels, predictions, w)
+        self.acc = tf.metrics.accuracy(labels, predictions, w, name="my_metric")
+        tf.summary.scalar('accuracy', self.acc[1])
